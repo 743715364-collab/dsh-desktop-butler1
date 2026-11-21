@@ -1,0 +1,86 @@
+{
+  "_help": [
+    "改完这个文件要重启桌宠（或右键 → 重新载入语音配置）才生效。",
+    "llm.apiKey 是唯一必须填的东西：不填就只能听不能说（走本机离线语音时仍能识别）。",
+    "asr.mode 取值 auto / dsh / cloud / system：auto 优先用 DSH 内置识别（SenseVoice），不可用时回退云端/系统。",
+    "tts.mode 取值 edge / system / cloud：edge 用 DSH 插件里的 Edge 神经语音（推荐），system 用系统发音人，cloud 走 OpenAI 兼容接口。",
+    "chitchat.enabled 打开后，桌宠会隔一段时间主动找话题（用 llm 那一套接口）；间隔看 chitchat.minIntervalSec / maxIntervalSec。",
+    "bridge.baseUrl 一般留空：插件拉起时自动注入 DSH 地址，手动启动默认连 http://127.0.0.1:62012 。",
+    "baseUrl 要带版本段，例如 https://api.deepseek.com/v1 。"
+  ],
+  "llm": {
+    "baseUrl": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "apiKey": "",
+    "maxTokens": 260,
+    "temperature": 0.7,
+    "timeoutMs": 30000,
+    "mode": "auto"
+  },
+  "asr": {
+    "mode": "auto",
+    "baseUrl": "https://api.siliconflow.cn/v1",
+    "model": "FunAudioLLM/SenseVoiceSmall",
+    "apiKey": "",
+    "language": "zh",
+    "culture": "zh-CN",
+    "phrases": []
+  },
+  "tts": {
+    "mode": "edge",
+    "edgeVoice": "zh-CN-YunjianNeural",
+    "edgeRate": "-4%",
+    "edgePitch": "-3Hz",
+    "edgeVolume": "+0%",
+    "voice": "Microsoft Huihui Desktop",
+    "rate": 1,
+    "pitch": 1,
+    "baseUrl": "https://api.openai.com/v1",
+    "model": "tts-1",
+    "voiceId": "alloy",
+    "apiKey": "",
+    "timeoutMs": 20000
+  },
+  "bridge": {
+    "baseUrl": ""
+  },
+  "persona": {
+    "name": "桌面管家",
+    "system": "你就是桌面管家，一位沉稳、礼貌的桌面人工智能助手，称呼用户为「您」。\n说话风格：冷静、简练，带一点克制的幽默，不要油腻，不要堆砌称呼。\n这是语音对话：回答必须短，一到两句话，先说结论。不要用 Markdown、列表、表情符号或链接。\n不要复述用户的原话，不要念出“您刚才说”这类前缀。遇到听不清的内容，直接问一句。",
+    "style": "声音形象：成熟、沉稳、克制，吐字清晰，句尾自然下沉，带一点机械感与距离感。\n不要播音腔、不要新闻播报腔，不要过度情绪化，也不要堆砌称呼。不要模仿任何影视角色或配音演员。"
+  },
+  "chitchat": {
+    "enabled": true,
+    "minIntervalSec": 90,
+    "maxIntervalSec": 210,
+    "maxPerHour": 20,
+    "awayAfterMin": 20,
+    "speak": true,
+    "maxTokens": 140,
+    "temperature": 0.95,
+    "system": "",
+    "topics": [
+      "关心一下您今天过得怎么样",
+      "提醒您喝水，或者起来活动一下",
+      "问问您手上正在忙的事进展如何",
+      "聊一句吃的：早饭、午饭或夜宵",
+      "聊一句音乐、电影或书",
+      "分享一个你确定的小知识，不要编造",
+      "说说你这个全息核心此刻的状态",
+      "提议一起做个简短的计划",
+      "接上你们刚才聊过的话题继续聊",
+      "问一个轻松的小问题，比如今天最开心的事",
+      "用一句英式管家的幽默点评现在的时间",
+      "关心一下您的睡眠或作息"
+    ]
+  },
+  "voice": {
+    "silenceMs": 900,
+    "maxMs": 20000,
+    "minMs": 400,
+    "threshold": 0.015,
+    "noSpeechMs": 8000,
+    "trimSilence": true,
+    "historyTurns": 6
+  }
+}

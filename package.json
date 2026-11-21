@@ -1,0 +1,52 @@
+{
+  "name": "dsh-desktop-butler",
+  "version": "1.18.4",
+  "private": false,
+  "type": "module",
+  "description": "Windows desktop pet for DSH with voice chat, installed-app launching, music and volume commands, and DSH work-status animations. Uses the DSH default model and credentials automatically.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.png"
+  },
+  "files": [
+    "index.js",
+    "work-status.js",
+    "voice-bridge.js",
+    "edge-tts-worker.cjs",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.png",
+    "README.md",
+    "pet"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-connection"
+      ]
+    }
+  },
+  "license": "MIT",
+  "author": "Desktop Butler",
+  "os": [
+    "win32"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-0 <0.2.2-0 || >=0.2.2-rc.1 <0.2.3-0 || >=0.2.3-0"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "desktop-pet",
+    "electron",
+    "voice",
+    "windows"
+  ]
+}

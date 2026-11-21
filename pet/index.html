@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; frame-src 'self' file:;"
+    />
+    <title>桌面管家</title>
+    <style>
+      :root {
+        --w: 460px;
+        --stage-h: calc(var(--w) * 9 / 16);
+        --gold: #ffc766;
+        --gold-soft: #ffe7b0;
+        --amber: #ff8a18;
+      }
+      /* 冷蓝主题：同一套视频与 3D 笼，用色相/冷光切到冷蓝全息。 */
+      html[data-theme='blue'] .orb-video {
+        filter: hue-rotate(185deg) saturate(1.16) brightness(1.04);
+      }
+      html[data-theme='blue'] .stage {
+        filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 30px rgba(58, 148, 255, 0.24));
+      }
+      html[data-theme='blue'] #app.hot .stage {
+        filter: brightness(1.08) drop-shadow(0 0 30px rgba(70, 170, 255, 0.3));
+      }
+      html[data-theme='blue'] #app.listening .stage {
+        filter: brightness(1.06) drop-shadow(0 0 28px rgba(80, 180, 255, 0.42));
+      }
+      html[data-theme='blue'] #app.thinking .stage {
+        filter: brightness(1.04) drop-shadow(0 0 26px rgba(110, 200, 255, 0.38));
+      }
+      /* 气泡整体做色相旋转；THINKING 的文字先保持暖色，转完才是蓝色。 */
+      html[data-theme='blue'] #app.thinking .tag::after {
+        color: rgba(255, 205, 128, 0.9);
+      }
+      html[data-theme='blue'] #app.speaking .stage {
+        filter: brightness(1.1) drop-shadow(0 0 36px rgba(80, 175, 255, 0.5));
+      }
+      html[data-theme='blue'] .bubble,
+      html[data-theme='blue'] .pulse-ring,
+      html[data-theme='blue'] .mic-ring {
+        filter: hue-rotate(185deg) saturate(1.12);
+      }
+      html[data-theme='blue'] .work-chip {
+        color: #a7dcff;
+        border-color: rgba(120, 205, 255, 0.5);
+        background: rgba(6, 16, 30, 0.78);
+        box-shadow: 0 0 12px rgba(60, 150, 255, 0.18);
+      }
+      html[data-theme='blue'] .work-chip[data-state='success'] {
+        color: #a9f0c3;
+        border-color: rgba(130, 232, 172, 0.5);
+      }
+      html[data-theme='blue'] .work-chip[data-state='error'] {
+        color: #ffab8f;
+        border-color: rgba(255, 140, 96, 0.5);
+      }
+      html[data-theme='blue'] .work-chip[data-state='waiting'] {
+        color: #bfe8ff;
+        border-color: rgba(120, 205, 255, 0.6);
+        box-shadow: 0 0 12px rgba(60, 150, 255, 0.24);
+      }
+      html[data-theme='blue'] .always:hover,
+      html[data-theme='blue'] #app.hot .always {
+        background: rgba(6, 16, 30, 0.5);
+        border-color: rgba(120, 205, 255, 0.35);
+        box-shadow: 0 0 10px rgba(60, 150, 255, 0.25);
+      }
+      html[data-theme='blue'] .always.on .dot {
+        background: #ffc766;
+        box-shadow: 0 0 8px rgba(255, 190, 80, 0.95), 0 0 18px rgba(255, 145, 20, 0.55);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+        user-select: none;
+        -webkit-user-select: none;
+        font-family: 'Bahnschrift', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      }
+      #app {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+      .stage {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: var(--w);
+        height: var(--stage-h);
+        transform: translateX(-50%);
+        transform-origin: 50% 58%;
+        animation: holoBreathe 6.2s ease-in-out infinite;
+        transition: filter 0.35s ease;
+        filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.35));
+        will-change: transform;
+      }
+      @keyframes holoBreathe {
+        0%,
+        100% {
+          transform: translateX(-50%) scale(0.996);
+        }
+        50% {
+          transform: translateX(-50%) scale(1.007);
+        }
+      }
+      #app.hot .stage {
+        filter: brightness(1.08) drop-shadow(0 0 30px rgba(255, 146, 26, 0.25));
+      }
+      .orb-video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        opacity: 0;
+        transition: opacity 0.2s ease, filter 0.35s ease;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .orb-video.front {
+        opacity: 1;
+      }
+      .holo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .live-frame {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        pointer-events: none;
+        z-index: 2;
+        display: none;
+        mix-blend-mode: screen;
+        opacity: 0;
+        transition: opacity 0.16s ease;
+      }
+      html[data-theme='live-gold'] .live-frame,
+      html[data-theme='live-blue'] .live-frame {
+        display: block;
+      }
+      .live-frame.ready {
+        opacity: 1;
+      }
+      html[data-theme='live-gold'] .holo,
+      html[data-theme='live-blue'] .holo {
+        display: none;
+      }
+      html[data-theme='live-blue'] .live-frame {
+        filter: brightness(1.95) saturate(1.35);
+      }
+      html[data-theme='live-blue'] .ambient {
+        opacity: 1;
+        background: radial-gradient(circle at 50% 46%, rgba(150, 210, 255, 0.12) 0%, rgba(70, 150, 255, 0.06) 30%, rgba(30, 90, 180, 0.02) 54%, transparent 68%);
+      }
+      html[data-theme='live-gold'] .orb-video {
+        opacity: 1;
+        filter: brightness(0.58) contrast(1.06) saturate(1.02);
+      }
+      html[data-theme='live-blue'] .orb-video {
+        opacity: 1;
+        filter: brightness(0.45) sepia(0.9) hue-rotate(185deg) saturate(1.35);
+      }
+      html[data-theme='live-gold'] .ambient,
+      html[data-theme='live-blue'] .ambient {
+        opacity: 1;
+      }
+      html[data-theme='live-gold'] .stage {
+        filter: drop-shadow(0 6px 26px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 34px rgba(255, 145, 32, 0.24));
+      }
+      html[data-theme='live-blue'] .stage {
+        filter: drop-shadow(0 6px 26px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 34px rgba(70, 160, 255, 0.24));
+      }
+      /* Cinematic theme: the hologram spills warm light onto the desktop. */
+      .ambient {
+        position: absolute;
+        left: 50%;
+        top: 48%;
+        width: 72%;
+        aspect-ratio: 1;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        pointer-events: none;
+        opacity: 0;
+        z-index: 0;
+        background:
+          radial-gradient(circle at 50% 43%, rgba(255, 226, 170, 0.20) 0%, rgba(255, 180, 76, 0.10) 28%, rgba(255, 125, 24, 0.03) 50%, transparent 66%);
+        filter: blur(22px);
+        transition: opacity 0.45s ease;
+      }
+      .ambient::after {
+        content: '';
+        position: absolute;
+        left: 14%;
+        right: 14%;
+        bottom: 2%;
+        height: 15%;
+        border-radius: 50%;
+        background: radial-gradient(ellipse, rgba(255, 158, 42, 0.20) 0%, rgba(255, 120, 20, 0.08) 38%, transparent 70%);
+        filter: blur(22px);
+      }
+      html[data-theme='cinematic'] .ambient {
+        opacity: 1;
+      }
+      html[data-theme='cinematic'] .orb-video {
+        filter: saturate(1.12) contrast(1.05) brightness(1.03);
+      }
+      html[data-theme='cinematic'] .stage {
+        filter: drop-shadow(0 6px 26px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 38px rgba(255, 145, 32, 0.28));
+      }
+      html[data-theme='cinematic'] #app.hot .stage {
+        filter: brightness(1.1) drop-shadow(0 0 44px rgba(255, 160, 48, 0.34));
+      }
+      html[data-theme='cinematic'] .bubble,
+      html[data-theme='cinematic'] .work-chip {
+        filter: saturate(1.08) contrast(1.03);
+      }
+      .hit {
+        position: absolute;
+        left: 50%;
+        top: 48%;
+        width: calc(var(--w) * 0.63);
+        height: calc(var(--w) * 0.63);
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        cursor: grab;
+        touch-action: none;
+        z-index: 4;
+      }
+      .hit.dragging {
+        cursor: grabbing;
+      }
+      .pulse-ring {
+        position: absolute;
+        left: 50%;
+        top: 48%;
+        width: calc(var(--w) * 0.5);
+        height: calc(var(--w) * 0.5);
+        transform: translate(-50%, -50%) scale(0.9);
+        border: 1px solid rgba(255, 204, 120, 0.7);
+        border-radius: 50%;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 3;
+      }
+      #app.clicked .pulse-ring {
+        animation: ring 0.55s ease-out;
+      }
+      @keyframes ring {
+        0% {
+          opacity: 0.9;
+          transform: translate(-50%, -50%) scale(0.72);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(1.22);
+        }
+      }
+      .bubble {
+        position: absolute;
+        left: 50%;
+        bottom: calc(var(--stage-h) - 4px);
+        transform: translate(-50%, 12px) scale(0.97);
+        width: max-content;
+        min-width: calc(var(--w) * 0.36);
+        max-width: calc(var(--w) * 0.88);
+        padding: 14px 18px 13px;
+        border-radius: 2px;
+        background: linear-gradient(135deg, rgba(20, 13, 7, 0.965), rgba(46, 27, 9, 0.95) 58%, rgba(17, 11, 6, 0.975));
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 187, 76, 0.42),
+          inset 0 0 26px rgba(255, 142, 22, 0.07),
+          0 0 28px rgba(255, 137, 20, 0.24),
+          0 12px 34px rgba(0, 0, 0, 0.55);
+        color: var(--gold-soft);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.22s ease,
+          transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+        z-index: 8;
+        backdrop-filter: blur(10px) saturate(1.2);
+      }
+      .bubble.on {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+        pointer-events: auto;
+        cursor: pointer;
+      }
+      .bubble::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        right: 15px;
+        top: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 206, 118, 0.8) 18%,
+          rgba(255, 247, 214, 0.95) 50%,
+          rgba(255, 206, 118, 0.8) 82%,
+          transparent
+        );
+        opacity: 0.9;
+      }
+      .bubble::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -8px;
+        transform: translateX(-50%);
+        border: 8px solid transparent;
+        border-top-color: rgba(26, 17, 8, 0.97);
+        border-bottom: none;
+        filter: drop-shadow(0 0 4px rgba(255, 170, 50, 0.42));
+      }
+      .tag {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 6px;
+        color: var(--gold);
+        font-family: 'Bahnschrift', 'Consolas', monospace;
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.28em;
+        opacity: 0.9;
+      }
+      .tag::before {
+        content: '';
+        width: 14px;
+        height: 1px;
+        background: var(--gold);
+        box-shadow: 0 0 6px rgba(255, 190, 80, 0.8);
+      }
+      .tag::after {
+        content: '● ONLINE';
+        margin-left: auto;
+        color: rgba(255, 190, 80, 0.55);
+        font-size: 8px;
+        letter-spacing: 0.2em;
+      }
+      .text {
+        font-size: 16px;
+        line-height: 1.65;
+        letter-spacing: 0.02em;
+        text-shadow: 0 0 14px rgba(255, 160, 40, 0.22);
+      }
+      .corner {
+        position: absolute;
+        width: 9px;
+        height: 9px;
+        border-color: rgba(255, 197, 100, 0.7);
+        border-style: solid;
+        pointer-events: none;
+      }
+      .corner.tl {
+        left: 3px;
+        top: 3px;
+        border-width: 1px 0 0 1px;
+      }
+      .corner.br {
+        right: 3px;
+        bottom: 3px;
+        border-width: 0 1px 1px 0;
+      }
+      /* ---- voice: listening ring around the always-listen dot ----------- */
+      .mic-ring {
+        position: absolute;
+        left: 50%;
+        bottom: 10px;
+        width: 26px;
+        height: 26px;
+        margin-left: -13px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 206, 120, 0.8);
+        opacity: 0;
+        pointer-events: none;
+        z-index: 5;
+      }
+      #app.listening .mic-ring {
+        opacity: 0.8;
+        animation: micRing 1.5s ease-out infinite;
+      }
+      @keyframes micRing {
+        0% {
+          transform: scale(1);
+          opacity: 0.72;
+        }
+        100% {
+          transform: scale(1.95);
+          opacity: 0;
+        }
+      }
+      /* ---- voice: orb + hud per state ----------------------------------- */
+      #app.listening .stage {
+        filter: brightness(1.06) drop-shadow(0 0 26px rgba(255, 190, 70, 0.36));
+      }
+      #app.thinking .stage {
+        filter: brightness(1.03) drop-shadow(0 0 24px rgba(120, 190, 255, 0.3));
+      }
+      #app.speaking .stage {
+        filter: brightness(1.1) drop-shadow(0 0 34px rgba(255, 172, 52, 0.44));
+      }
+      .speak-aura {
+        position: absolute;
+        left: 50%;
+        bottom: 4px;
+        width: calc(var(--w) * 1.18);
+        height: calc(var(--w) * 0.66);
+        transform: translateX(-50%);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 3;
+        opacity: 0;
+        filter: blur(22px);
+        mix-blend-mode: screen;
+        background: radial-gradient(
+          ellipse at 50% 52%,
+          rgba(255, 214, 145, 0.30) 0%,
+          rgba(255, 160, 40, 0.13) 32%,
+          transparent 68%
+        );
+      }
+      html[data-theme='live-blue'] .speak-aura {
+        background: radial-gradient(
+          ellipse at 50% 52%,
+          rgba(160, 215, 255, 0.28) 0%,
+          rgba(60, 150, 255, 0.12) 32%,
+          transparent 68%
+        );
+      }
+      #app.speak-fx .speak-aura {
+        animation: speakBreathe var(--speak-dur, 3.2s) ease-in-out infinite;
+      }
+      @keyframes speakBreathe {
+        0%,
+        100% {
+          opacity: calc(var(--speak-glow, 0.2) * 0.35);
+          transform: translateX(-50%) scale(0.92);
+        }
+        50% {
+          opacity: var(--speak-glow, 0.2);
+          transform: translateX(-50%) scale(1.08);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app.speak-fx .speak-aura {
+          animation: none;
+          opacity: 0.06;
+        }
+      }
+      #app.listening .tag::after {
+        content: '● LISTENING';
+        color: rgba(255, 214, 130, 0.92);
+      }
+      #app.thinking .tag::after {
+        content: '● THINKING';
+        color: rgba(150, 205, 255, 0.9);
+      }
+      #app.speaking .tag::after {
+        content: '● SPEAKING';
+        color: rgba(255, 214, 130, 0.92);
+      }
+      /* ---- DSH work status chip ----------------------------------------- */
+      .work-chip {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        max-width: 190px;
+        padding: 2px 9px;
+        border: 1px solid rgba(255, 197, 100, 0.45);
+        border-radius: 3px;
+        background: rgba(20, 13, 7, 0.74);
+        color: var(--gold);
+        font-family: 'Bahnschrift', 'Consolas', monospace;
+        font-size: 9px;
+        font-weight: 600;
+        line-height: 18px;
+        letter-spacing: 0.2em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0;
+        transform: translateY(5px);
+        pointer-events: none;
+        transition:
+          opacity 0.22s ease,
+          transform 0.22s ease;
+        z-index: 7;
+        backdrop-filter: blur(6px) saturate(1.2);
+      }
+      .work-chip.on {
+        opacity: 0.95;
+        transform: translateY(0);
+      }
+      .work-chip[data-state='success'] {
+        color: #a9f0c3;
+        border-color: rgba(130, 232, 172, 0.5);
+      }
+      .work-chip[data-state='error'] {
+        color: #ffab8f;
+        border-color: rgba(255, 140, 96, 0.5);
+      }
+      .work-chip[data-state='waiting'] {
+        color: #ffe7a3;
+        box-shadow: 0 0 12px rgba(255, 190, 60, 0.2);
+      }
+      /* ---- voice: always-listen toggle (dot only) ----------------------- */
+      .always {
+        position: absolute;
+        left: 50%;
+        bottom: 10px;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        border-radius: 50%;
+        background: transparent;
+        cursor: pointer;
+        opacity: 0.7;
+        pointer-events: auto;
+        z-index: 6;
+        transition:
+          opacity 0.2s ease,
+          background 0.2s ease,
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .always:hover,
+      #app.hot .always {
+        opacity: 1;
+        background: rgba(20, 13, 7, 0.45);
+        border-color: rgba(255, 197, 100, 0.35);
+        box-shadow: 0 0 10px rgba(255, 150, 30, 0.2);
+      }
+      .always .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(255, 199, 102, 0.4);
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+      }
+      .always.on {
+        opacity: 1;
+      }
+      .always.on .dot {
+        background: #ffc766;
+        box-shadow: 0 0 7px rgba(255, 190, 80, 0.9), 0 0 14px rgba(255, 145, 20, 0.45);
+        animation: alwaysPulse 1.8s ease-in-out infinite;
+      }
+      @keyframes alwaysPulse {
+        0%,
+        100% {
+          opacity: 0.55;
+          transform: scale(0.85);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.15);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .orb-video,
+        .bubble,
+        .stage,
+        .work-chip,
+        .always {
+          transition: none;
+        }
+        .stage {
+          animation: none;
+        }
+        .always.on .dot {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="stage" id="stage">
+        <div class="ambient" aria-hidden="true"></div>
+        <video class="orb-video" id="v0" muted playsinline preload="auto"></video>
+        <video class="orb-video" id="v1" muted playsinline preload="auto"></video>
+        <canvas class="holo" id="holo" width="640" height="360" aria-hidden="true"></canvas>
+        <iframe class="live-frame" id="liveFrame" title="桌面管家 live rings" aria-hidden="true"></iframe>
+        <div class="pulse-ring"></div>
+        <div class="hit" id="hit" aria-label="桌面管家"></div>
+        <span class="mic-ring" aria-hidden="true"></span>
+        <button class="always" id="always" type="button" title="语音常开（持续聆听）" aria-label="语音常开" aria-pressed="false">
+          <span class="dot" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="speak-aura" id="speakAura" aria-hidden="true"></div>
+      <div class="bubble" id="bubble">
+        <span class="corner tl"></span>
+        <span class="corner br"></span>
+        <div class="tag">桌面管家</div>
+        <div class="text" id="text">为您服务。</div>
+      </div>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

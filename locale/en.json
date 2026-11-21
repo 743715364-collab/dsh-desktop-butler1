@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Desktop Butler pet",
+    "description": "Desktop Butler Electron pet for DSH: uses the DSH default model and credentials automatically, so no separate API key is needed. Supports voice chat, launching installed apps, music and volume commands, and DSH work-status animations."
+  }
+}

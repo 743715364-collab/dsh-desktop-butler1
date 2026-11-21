@@ -1,0 +1,9 @@
+{
+  "name": "desktop-butler-pet",
+  "version": "1.19.1",
+  "private": true,
+  "description": "Desktop Butler holographic desktop pet",
+  "main": "main.js",
+  "author": "Desktop Butler project",
+  "license": "MIT"
+}

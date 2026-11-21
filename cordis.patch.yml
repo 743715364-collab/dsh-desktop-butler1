@@ -1,0 +1,10 @@
+# dsh-desktop-butler：把独立版桌面管家桌宠挂进 DSH。
+# 默认使用插件包内的 pet/ 目录；首次启动会复制到 %USERPROFILE%\.dsh\desktop-butler-app。
+# electronPath 可省略，默认用 %USERPROFILE%\.dsh\electron\electron.exe。
+- insert:
+    - id: desktop-butler
+      name: dsh-desktop-butler
+      config:
+        autoStart: true
+        # DSH 思考 / 干活 / 等确认 / 完成 / 出错时，桌宠做对应动作；设为 false 可关闭
+        workStatus: true

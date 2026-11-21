@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>桌面管家</title>
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+  #app{position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:transparent}
+  .stage{position:absolute;left:70px;top:128px;width:860px;height:500px;overflow:hidden}
+  video.base{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+    opacity:1;filter:brightness(.62) contrast(1.05) saturate(1.02)}
+  iframe.live{position:absolute;inset:0;width:100%;height:100%;border:0;
+    pointer-events:none;mix-blend-mode:normal;filter:brightness(1.20);
+    display:none;opacity:0;transition:opacity .16s ease}
+  iframe.live.active{display:block}
+  iframe.live.ready{opacity:1}
+  .control-ring{position:fixed;left:50%;top:50%;width:760px;height:500px;transform:translate(-50%,-50%);
+    border:1px solid rgba(255,197,100,.30);border-radius:50%;z-index:5;cursor:grab;
+    touch-action:none;box-shadow:0 0 34px rgba(255,145,30,.045),inset 0 0 34px rgba(255,145,30,.035)}
+  .control-ring::before{content:'';position:absolute;inset:14px;border:1px dashed rgba(255,197,100,.16);border-radius:50%}
+  .control-ring:active{cursor:grabbing}
+  .handle{position:absolute;left:50%;top:50%;width:10px;height:10px;border-radius:50%;
+    background:#ffd27a;box-shadow:0 0 10px rgba(255,190,70,.95),0 0 24px rgba(255,140,20,.55);
+    transform:translate(-50%,-50%) translate(380px,0);pointer-events:none}
+  .tick{position:absolute;left:50%;top:50%;width:1px;height:5px;background:rgba(255,202,120,.28);
+    transform-origin:0 0;pointer-events:none}
+  .tick.major{height:10px;background:rgba(255,218,150,.55);box-shadow:0 0 6px rgba(255,180,70,.4)}
+  body.blue .control-ring{border-color:rgba(130,200,255,.32);box-shadow:0 0 34px rgba(60,150,255,.05),inset 0 0 34px rgba(60,150,255,.04)}
+  body.blue .control-ring::before{border-color:rgba(130,200,255,.18)}
+  body.blue .handle{background:#9fd7ff;box-shadow:0 0 10px rgba(120,200,255,.95),0 0 24px rgba(60,150,255,.55)}
+  body.blue .tick{background:rgba(150,210,255,.32)}
+  body.blue .tick.major{background:rgba(190,230,255,.6);box-shadow:0 0 6px rgba(90,180,255,.45)}
+  .node{position:fixed;transform:translate(-50%,-50%);z-index:9;padding:7px 15px;
+    border:1px solid rgba(255,197,100,.28);border-radius:3px;background:rgba(12,9,6,.62);
+    color:#f3d49a;font:500 12px 'Microsoft YaHei',sans-serif;letter-spacing:.08em;
+    cursor:pointer;backdrop-filter:blur(8px);transition:background .15s,border-color .15s,color .15s}
+  .node:hover{border-color:rgba(255,214,140,.65);background:rgba(40,26,10,.78)}
+  .node.active{border-color:rgba(255,220,150,.9);background:linear-gradient(180deg,#ffe3a8,#ffc25e);color:#241505}
+  .n-voice{left:500px;top:120px}
+  .n-look{left:835px;top:248px}
+  .n-quick{left:835px;top:512px}
+  .n-place{left:165px;top:512px}
+  .n-system{left:165px;top:248px}
+  .n-quit{left:500px;top:642px}
+  .panel{position:fixed;left:0;top:0;width:260px;max-height:560px;z-index:20;
+    border:0;border-radius:0;background:transparent;
+    box-shadow:none;backdrop-filter:none;display:flex;flex-direction:column;
+    text-shadow:0 1px 5px rgba(0,0,0,.9),0 0 12px rgba(0,0,0,.55)}
+  .panel[hidden]{display:none}
+  .panel-head{display:flex;align-items:center;padding:8px 10px 7px;
+    border-bottom:1px solid rgba(255,197,100,.16);font-size:12px;letter-spacing:.14em;color:#ffd58d}
+  .panel-body{overflow:auto;padding:6px 6px 8px;background:transparent}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:8px 9px;border-radius:3px;color:#e9cca0;font-size:12px;cursor:pointer;background:transparent}
+  .row:hover{background:rgba(255,190,90,.10)}
+  .row .val{font:600 8px 'Consolas',monospace;letter-spacing:.1em;color:rgba(255,210,145,.55)}
+  .row.on .val{color:#ffd27a}
+  .row.danger{color:#ffb08d}
+  .row.danger:hover{background:rgba(255,100,60,.10)}
+  .row .dot{width:6px;height:6px;border-radius:50%;background:rgba(255,200,120,.25)}
+  .row.on .dot{background:#ffd27a;box-shadow:0 0 7px rgba(255,180,60,.8)}
+  .group{margin:2px 8px 5px;font:600 7px 'Consolas',monospace;letter-spacing:.2em;color:rgba(255,200,120,.32)}
+  body.blue .panel,body.blue .node{filter:hue-rotate(185deg) saturate(1.1)}
+  .theme-toast{position:fixed;left:50%;bottom:92px;transform:translate(-50%,8px);z-index:30;
+    padding:7px 17px;border:1px solid rgba(255,205,125,.45);border-radius:3px;
+    background:rgba(12,9,6,.88);color:#ffd894;font-size:13px;letter-spacing:.1em;
+    opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;
+    box-shadow:0 8px 24px rgba(0,0,0,.4)}
+  .theme-toast.on{opacity:1;transform:translate(-50%,0)}
+  body.blue video.base{filter:brightness(.48) sepia(.9) hue-rotate(185deg) saturate(1.35)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="stage">
+    <video class="base" src="assets/webm/idle.webm" muted autoplay loop playsinline></video>
+    <iframe class="live live-gold active" src="assets/live/gold.html?paused=1" title="桌面管家"></iframe>
+    <iframe class="live live-blue" src="assets/live/blue.html?paused=1" title="桌面管家"></iframe>
+  </div>
+  <div class="control-ring" id="ringControl"><span class="handle" id="handle"></span></div>
+  <button class="node n-voice" data-cat="voice">语音</button>
+  <button class="node n-look" data-cat="size">尺寸</button>
+  <button class="node n-quick" data-cat="quick">快捷</button>
+  <button class="node n-place" data-cat="place">位置</button>
+  <button class="node n-system" data-cat="system">系统</button>
+  <button class="node n-quit" data-cat="quit">退出</button>
+  <div class="panel" id="panel" hidden>
+    <div class="panel-head"><span id="panelTitle"></span></div>
+    <div class="panel-body" id="panelBody"></div>
+  </div>
+  <div class="theme-toast" id="themeToast"></div>
+</div>
+<script>
+  "use strict";
+  var theme = new URLSearchParams(location.search).get("theme") || "live-gold";
+  var goldFrame = document.querySelector("iframe.live-gold");
+  var blueFrame = document.querySelector("iframe.live-blue");
+  var frames = [goldFrame, blueFrame];
+  function setActiveFrame(f) {
+    frames.forEach(function (x) { x.classList.toggle("active", x === f); });
+  }
+  if (theme === "live-blue") {
+    document.body.classList.add("blue");
+    setActiveFrame(blueFrame);
+  }
+  var ring = document.getElementById("ringControl");
+  var handle = document.getElementById("handle");
+  var spin = 0;
+  var dragging = false;
+  var dragMoved = false;
+  var startAngle = 0;
+  var startSpin = 0;
+  function applySpin() {
+    frames.forEach(function (f) {
+      try {
+        if (f.contentWindow && f.contentWindow.ringControl) {
+          f.contentWindow.ringControl.setSpin(spin);
+        }
+      } catch (e) { /* iframe not ready */ }
+    });
+    var x = Math.cos(spin) * 380;
+    var y = Math.sin(spin) * 250;
+    handle.style.transform = "translate(-50%,-50%) translate(" + x + "px," + y + "px)";
+  }
+  frames.forEach(function (f) {
+    function ready() {
+      f.classList.add("ready");
+      try {
+        f.contentWindow.ringControl.setPaused(true);
+        f.contentWindow.ringControl.setSpin(spin);
+      } catch (e) { /* ignore */ }
+    }
+    f.addEventListener("load", ready);
+    try {
+      if (f.contentDocument && f.contentDocument.readyState === "complete") ready();
+    } catch (e) { /* ignore */ }
+  });
+  function center() {
+    var r = ring.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  ring.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    userRotated = true;
+    dragMoved = false;
+    var c = center();
+    startAngle = Math.atan2(e.clientY - c.y, e.clientX - c.x);
+    startSpin = spin;
+    dragging = true;
+    try { ring.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
+  ring.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    var c = center();
+    var a = Math.atan2(e.clientY - c.y, e.clientX - c.x);
+    var delta = a - startAngle;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    if (Math.abs(delta) > 0.02) dragMoved = true;
+    spin = startSpin + delta;
+    applySpin();
+  });
+  function endDrag(e, applyTheme) {
+    if (!dragging) return;
+    dragging = false;
+    try { ring.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    if (!applyTheme || !dragMoved) return;
+    var idx = Math.round(spin / STEP);
+    spin = idx * STEP;
+    applySpin();
+    var t = THEMES[((idx % THEMES.length) + THEMES.length) % THEMES.length];
+    if (api && t) {
+      api.action("theme", t.value);
+      showTheme(t.label);
+    }
+  }
+  ring.addEventListener("pointerup", function (e) { endDrag(e, true); });
+  ring.addEventListener("pointercancel", function (e) { endDrag(e, false); });
+  for (var i = 0; i < 48; i++) {
+    var tick = document.createElement("span");
+    tick.className = "tick" + (i % 6 === 0 ? " major" : "");
+    var a = i / 48 * Math.PI * 2;
+    var tx = 380 + Math.sin(a) * 380;
+    var ty = 250 - Math.cos(a) * 250;
+    tick.style.left = tx + "px";
+    tick.style.top = ty + "px";
+    tick.style.transform = "rotate(" + (a * 180 / Math.PI) + "deg)";
+    ring.appendChild(tick);
+  }
+
+  var api = window.desktopButlerSettings;
+  var current = null;
+  var openCat = "";
+  var openNode = null;
+  var previewTheme = "";
+  var THEMES = [
+    { value: "live-gold", label: "实况金色" },
+    { value: "live-blue", label: "实况深蓝" },
+    { value: "gold", label: "金色全息" },
+    { value: "blue", label: "冷蓝全息" },
+    { value: "cinematic", label: "环境光" },
+  ];
+  var STEP = Math.PI * 2 / THEMES.length;
+  var userRotated = false;
+  var themeToast = document.getElementById("themeToast");
+  var themeTimer = 0;
+  function showTheme(label) {
+    if (!themeToast) return;
+    themeToast.textContent = label;
+    themeToast.classList.add("on");
+    clearTimeout(themeTimer);
+    themeTimer = setTimeout(function () { themeToast.classList.remove("on"); }, 1100);
+  }
+  function alignTheme(name) {
+    var idx = THEMES.findIndex(function (x) { return x.value === name; });
+    if (idx >= 0) {
+      spin = idx * STEP;
+      applySpin();
+    }
+  }
+  var MENU = {
+    voice: {
+      title: "语音",
+      rows: [
+        { label: "语音对话", action: "voice" },
+        { label: "语音常开", action: "alwaysListen", toggle: "alwaysListen" },
+        { label: "闲聊模式", action: "chitchat", toggle: "chitchat" },
+      ],
+    },
+    size: {
+      title: "尺寸",
+      rows: [
+        { label: "小", action: "size", value: 380, radio: "size" },
+        { label: "中", action: "size", value: 460, radio: "size" },
+        { label: "大", action: "size", value: 580, radio: "size" },
+        { label: "始终置顶", action: "alwaysOnTop", toggle: "alwaysOnTop" },
+      ],
+    },
+    quick: {
+      title: "快捷",
+      rows: [
+        { label: "现在聊一句", action: "chitchatNow" },
+        { label: "播放每日推荐", action: "daily" },
+        { label: "B 站首页", action: "biliHome" },
+        { label: "B 站动态", action: "biliDynamic" },
+        { label: "经典老歌", action: "biliClassic" },
+      ],
+    },
+    place: {
+      title: "位置",
+      rows: [
+        { label: "回到右下角", action: "resetPosition" },
+        { label: "隐藏桌宠", action: "hide" },
+      ],
+    },
+    system: {
+      title: "系统",
+      rows: [
+        { label: "打开语音配置", action: "voiceConfig" },
+        { label: "重新载入语音配置", action: "reloadConfig" },
+        { label: "重建软件索引", action: "appIndex" },
+        { label: "关于 桌面管家", action: "about" },
+      ],
+    },
+    quit: {
+      title: "退出",
+      rows: [{ label: "退出 桌面管家", action: "quit", danger: true }],
+    },
+  };
+  var panel = document.getElementById("panel");
+  var panelTitle = document.getElementById("panelTitle");
+  var panelBody = document.getElementById("panelBody");
+
+  function updatePreview(next) {
+    if (!next || next === previewTheme) return;
+    previewTheme = next;
+    if (next === "live-blue") {
+      document.body.classList.add("blue");
+      setActiveFrame(blueFrame);
+    } else {
+      document.body.classList.remove("blue");
+      setActiveFrame(goldFrame);
+    }
+  }
+
+  function positionPanel() {
+    if (panel.hidden || !openNode) return;
+    var node = openNode.getBoundingClientRect();
+    var pw = panel.offsetWidth || 310;
+    var ph = panel.offsetHeight || 320;
+    var cx = node.left + node.width / 2;
+    var cy = node.top + node.height / 2;
+    var vx = innerWidth / 2;
+    var vy = innerHeight / 2;
+    var dx = Math.abs(cx - vx);
+    var dy = Math.abs(cy - vy);
+    var gap = 12;
+    var top = cy < vy;
+    var centered = Math.abs(cx - vx) < 60;
+    var left, topPos;
+    if (centered) {
+      // Top/bottom node: pin to the top/bottom edge, offset sideways so it stays clickable.
+      left = top ? 12 : innerWidth - pw - 12;
+      topPos = top ? 12 : innerHeight - ph - 12;
+    } else if (cx < vx) {
+      // 左上 / 左下
+      left = node.left - pw - gap;
+      topPos = top ? node.top - ph - gap : node.bottom + gap;
+    } else {
+      // 右上 / 右下
+      left = node.right + gap;
+      topPos = top ? node.top - ph - gap : node.bottom + gap;
+    }
+    left = Math.max(12, Math.min(left, innerWidth - pw - 12));
+    topPos = Math.max(12, Math.min(topPos, innerHeight - ph - 12));
+    panel.style.left = left + "px";
+    panel.style.top = topPos + "px";
+  }
+
+  function closePanel() {
+    openCat = "";
+    openNode = null;
+    document.querySelectorAll(".node").forEach(function (n) { n.classList.remove("active"); });
+    panel.hidden = true;
+  }
+
+  function renderPanel() {
+    if (!openCat || !MENU[openCat]) { panel.hidden = true; return; }
+    var data = MENU[openCat];
+    panel.hidden = false;
+    panelTitle.textContent = data.title;
+    panelBody.innerHTML = "";
+    data.rows.forEach(function (r) {
+      if (r.group) {
+        var g = document.createElement("div");
+        g.className = "group";
+        g.textContent = r.group;
+        panelBody.appendChild(g);
+        return;
+      }
+      var row = document.createElement("div");
+      row.className = "row" + (r.danger ? " danger" : "");
+      var left = document.createElement("span");
+      left.textContent = r.label;
+      row.appendChild(left);
+      var right = document.createElement("span");
+      right.className = "val";
+      if (r.toggle) {
+        var on = Boolean(current && current[r.toggle]);
+        row.classList.toggle("on", on);
+        right.textContent = on ? "ON" : "OFF";
+      } else if (r.radio) {
+        var selected = current && String(current[r.radio]) === String(r.value);
+        row.classList.toggle("on", Boolean(selected));
+        right.textContent = selected ? "●" : "";
+      }
+      row.appendChild(right);
+      row.addEventListener("click", function () {
+        if (!api) return;
+        if (r.toggle) api.action(r.action, !(current && current[r.toggle]));
+        else if (r.radio) api.action(r.action, r.value);
+        else api.action(r.action);
+      });
+      panelBody.appendChild(row);
+    });
+    positionPanel();
+  }
+
+  document.querySelectorAll(".node").forEach(function (node) {
+    node.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var cat = node.dataset.cat;
+      if (openCat === cat && !panel.hidden) {
+        closePanel();
+        return;
+      }
+      openCat = cat;
+      openNode = node;
+      document.querySelectorAll(".node").forEach(function (n) {
+        n.classList.toggle("active", n === node);
+      });
+      renderPanel();
+    });
+  });
+
+  if (api) {
+    api.getState().then(function (s) {
+      current = s;
+      updatePreview(s.theme);
+      if (!userRotated) alignTheme(s.theme);
+      renderPanel();
+    }).catch(function () {});
+    api.onState(function (s) { current = s; updatePreview(s.theme); renderPanel(); });
+  }
+
+  function close() {
+    if (api) api.close();
+    else window.close();
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (openCat) {
+      closePanel();
+    } else {
+      close();
+    }
+  });
+  document.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+    close();
+  });
+  applySpin();
+</script>
+</body>
+</html>
